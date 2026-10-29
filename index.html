@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>班級黑板聯絡簿</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Shantell+Sans:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        body {
+            font-family: 'Shantell Sans', cursive, sans-serif;
+        }
+        
+        .blackboard {
+            background-color: #1b382b; /* 經典黑板綠 */
+            background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0);
+            background-size: 20px 20px;
+            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.6);
+            border: 12px solid #5c3a21; /* 木質框 */
+        }
+
+        .chalk-text {
+            color: #f4f4f0;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.4), 0 0 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .chalk-border {
+            border-bottom: 2px dashed rgba(244, 244, 240, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-amber-100 min-h-screen p-4 flex flex-col items-center justify-center">
+
+    <!-- 主體黑板容器 -->
+    <div class="blackboard w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-6 relative">
+        
+        <!-- 粉筆標題與日期切換列 -->
+        <div class="text-center pb-3 chalk-border space-y-2">
+            <h1 class="chalk-text text-xl font-bold tracking-wider">🏫每日值日生黑板</h1>
+            
+            <div class="flex items-center justify-center space-x-2 mt-2">
+                <button onclick="changeDate(-1)" class="bg-black/30 hover:bg-black/50 text-white px-2 py-1 rounded text-xs border border-white/20 transition">
+                    &lt; 前一日
+                </button>
+                
+                <!-- 日期選擇器 (預設帶入今天，限制最近 30 天) -->
+                <input type="date" id="datePicker" class="bg-black/40 text-white text-xs px-2 py-1 rounded border border-white/30 text-center font-sans focus:outline-none" onchange="loadDateData(this.value)">
+                
+                <button onclick="changeDate(1)" class="bg-black/30 hover:bg-black/50 text-white px-2 py-1 rounded text-xs border border-white/20 transition">
+                    後一日 &gt;
+                </button>
+            </div>
+        </div>
+
+        <!-- 考試與功課區 -->
+        <div class="space-y-3">
+            <h2 class="chalk-text text-md font-bold underline decoration-wavy">📝 今日作業與考試</h2>
+            
+            <!-- 動態載入功課的容器 -->
+            <ul id="homeworkList" class="space-y-2 text-sm chalk-text">
+                <li class="text-center py-2 opacity-70">⏳ 正在載入黑板內容...</li>
+            </ul>
+        </div>
+
+        <!-- 老師叮嚀區 -->
+        <div class="bg-black/30 border border-white/20 rounded-xl p-3 space-y-1">
+            <h2 class="chalk-text text-sm font-bold">📢 老師佈告欄</h2>
+            <p id="noticeText" class="chalk-text text-xs leading-relaxed opacity-90">
+                載入中...
+            </p>
+        </div>
+
+        <!-- 家長互動 / 填寫回傳按鈕 -->
+        <div class="pt-1 text-center">
+            <a href="https://forms.gle/你的Google表單回傳連結" target="_blank" class="block w-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl shadow-lg border border-emerald-500 transition text-xs">
+                ✍️ 點此填寫作業完成與家長簽名
+            </a>
+        </div>
+
+    </div>
+
+    <!-- 底部小字 -->
+    <p class="text-xs text-amber-900 mt-4 opacity-70">©電子聯絡簿系統</p>
+
+    <!-- JavaScript 邏輯：串接 Google 試算表資料 -->
+    <script>
+        // ⚠️ 請把下方引號內的網址換成你剛剛部署好的 Google Apps Script 網頁應用程式網址
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxH_W_CJIU31yFGDSdsLvI_ENAy8AzTYMGJgIRxcP4G0KmgDlp1vfMbXTuASYcxf5kO/exec";
+
+        window.onload = function() {
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('datePicker');
+            dateInput.value = today;
+            
+            // 限制只能查最近 30 天
+            let d = new Date();
+            dateInput.max = today;
+            d.setDate(d.getDate() - 30);
+            dateInput.min = d.toISOString().split('T')[0];
+
+            fetchBlackboardData(today);
+        }
+
+        function changeDate(days) {
+            const dateInput = document.getElementById('datePicker');
+            let currentDate = new Date(dateInput.value);
+            currentDate.setDate(currentDate.getDate() + days);
+            let newDateStr = currentDate.toISOString().split('T')[0];
+            
+            if (newDateStr >= dateInput.min && newDateStr <= dateInput.max) {
+                dateInput.value = newDateStr;
+                fetchBlackboardData(newDateStr);
+            } else {
+                alert("只能查詢最近 30 天內的紀錄喔！");
+            }
+        }
+
+        function fetchBlackboardData(dateStr) {
+            const hwListContainer = document.getElementById('homeworkList');
+            const noticeContainer = document.getElementById('noticeText');
+            
+            hwListContainer.innerHTML = `<li class="text-center py-2 opacity-70">⏳ 正在尋找 ${dateStr} 的粉筆字...</li>`;
+
+            fetch(`${GAS_API_URL}?date=${dateStr}`)
+                .then(response => response.json())
+                .then(data => {
+                    hwListContainer.innerHTML = "";
+                    
+                    if (data.homeworks.length === 0) {
+                        hwListContainer.innerHTML = `<li class="text-center py-2 opacity-70">✨ 這一天沒有登記作業或考試喔！</li>`;
+                    } else {
+                        data.homeworks.forEach(hw => {
+                            let li = document.createElement('li');
+                            li.className = "flex items-start justify-between bg-black/20 p-2.5 rounded-lg";
+                            li.innerHTML = `
+                                <div>
+                                    <span class="bg-indigo-500/80 text-white text-[10px] px-2 py-0.5 rounded">${hw.subject}</span>
+                                    <span class="ml-2 font-bold">${hw.content}</span>
+                                </div>
+                            `;
+                            hwListContainer.appendChild(li);
+                        });
+                    }
+
+                    if (data.notice) {
+                        noticeContainer.innerText = data.notice;
+                    } else {
+                        noticeContainer.innerText = "今天沒有特別交代事項，保持愉快！";
+                    }
+                })
+                .catch(error => {
+                    console.error("讀取失敗:", error);
+                    hwListContainer.innerHTML = `<li class="text-center py-2 text-red-300">⚠️ 讀取資料失敗，請檢查 API 網址是否正確</li>`;
+                });
+        }
+
+        function loadDateData(selectedDate) {
+            fetchBlackboardData(selectedDate);
+        }
+    </script>
+</body>
+</html>
